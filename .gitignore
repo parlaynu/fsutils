@@ -1,0 +1,7 @@
+# golang binaries
+bin/
+
+# local files
+.DS_Store
+local/
+
