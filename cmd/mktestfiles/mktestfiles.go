@@ -18,6 +18,8 @@ import (
 type config struct {
 	root     string
 	percent  uint64
+	minsize  int64
+	maxsize  int64
 	nwriters uint64
 }
 
@@ -53,20 +55,22 @@ func main() {
 		wg.Add(1)
 		go func(idx int, path string, nbytes uint64) {
 			defer wg.Done()
-			write_files(idx, rand.Int63(), path, nbytes)
+			write_files(idx, rand.Int63(), path, nbytes, cfg.minsize, cfg.maxsize)
 		}(i, cfg.root, per_writer)
 	}
 	wg.Wait()
 }
 
-func write_files(idx int, seed int64, root string, nbytes uint64) {
+func write_files(idx int, seed int64, root string, nbytes uint64, minsize, maxsize int64) {
 	fmt.Printf("%02d: writing %d bytes to %s\n", idx, nbytes, root)
 
 	rng := rand.New(rand.NewSource(seed))
 
+	rndsize := maxsize - minsize
+
 	count := 0
 	for nbytes > 0 {
-		size := uint64(1000000 + rng.Int63n(29000000))
+		size := uint64(minsize + rng.Int63n(rndsize))
 		if size > nbytes {
 			size = nbytes
 		}
@@ -135,14 +139,14 @@ func fs_aspace(path string) (uint64, error) {
 func parse_cmdline() *config {
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [-n writers] <path> <percent_fill>\n", filepath.Base(os.Args[0]))
+		fmt.Fprintf(os.Stderr, "Usage: %s [-n writers] <path> <percent_fill> [<minsize> [<maxsize>]]\n", filepath.Base(os.Args[0]))
 		flag.PrintDefaults()
 	}
 
 	nwriters := flag.Uint64("n", 1, "number of concurrent writers")
 	flag.Parse()
 
-	if flag.NArg() != 2 {
+	if flag.NArg() < 2 {
 		fmt.Printf("insufficient arguments provided\n")
 		flag.Usage()
 		return nil
@@ -151,13 +155,32 @@ func parse_cmdline() *config {
 	var cfg config
 	var err error
 
+	cfg.nwriters = *nwriters
+
 	cfg.root = flag.Arg(0)
 	if cfg.percent, err = strconv.ParseUint(flag.Arg(1), 10, 32); err != nil {
 		fmt.Printf("parameter 'percent_fill' must be an integer\n")
 		flag.Usage()
 		return nil
 	}
-	cfg.nwriters = *nwriters
+
+	cfg.minsize = 1000000
+	if flag.NArg() >= 3 {
+		if cfg.minsize, err = strconv.ParseInt(flag.Arg(2), 10, 32); err != nil || cfg.minsize <= 0 {
+			fmt.Printf("parameter 'minsize' must be an integer > 0\n")
+			flag.Usage()
+			return nil
+		}
+	}
+
+	cfg.maxsize = 30000000
+	if flag.NArg() == 4 {
+		if cfg.maxsize, err = strconv.ParseInt(flag.Arg(3), 10, 32); err != nil || cfg.maxsize < cfg.minsize {
+			fmt.Printf("parameter 'maxsize' must be a positive integer >= 'minsize'\n")
+			flag.Usage()
+			return nil
+		}
+	}
 
 	return &cfg
 }
