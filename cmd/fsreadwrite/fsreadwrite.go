@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -47,7 +46,7 @@ func main() {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			worker(idx, ch1)
+			worker(idx, ch1, rand.Int63())
 		}(i)
 	}
 
@@ -130,7 +129,9 @@ func filter_files(chi <-chan string, cho chan<- string) {
 		humanize.FtoaWithDigits(duration.Minutes(), 4))
 }
 
-func worker(idx int, ch <-chan string) {
+func worker(idx int, ch <-chan string, seed int64) {
+
+	rng := rand.New(rand.NewSource(seed))
 
 	for fpath := range ch {
 		var err error
@@ -138,11 +139,11 @@ func worker(idx int, ch <-chan string) {
 		v := rand.Intn(3)
 		switch {
 		case v == 0:
-			err = read_all(idx, fpath)
+			err = read_full(idx, fpath)
 		case v == 1:
 			err = read_some(idx, fpath)
 		case v == 2:
-			err = read_write_some(idx, fpath)
+			err = write_new(idx, fpath, rng)
 		}
 
 		if err != nil {
@@ -157,7 +158,7 @@ func (nw NullWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func read_all(idx int, fpath string) error {
+func read_full(idx int, fpath string) error {
 	fmt.Printf("%02d: read_all %s\n", idx, fpath)
 
 	file, err := os.Open(fpath)
@@ -226,8 +227,8 @@ func read_some(idx int, fpath string) error {
 	return nil
 }
 
-func read_write_some(idx int, fpath string) error {
-	fmt.Printf("%02d: read_write_some %s\n", idx, fpath)
+func write_new(idx int, fpath string, rng *rand.Rand) error {
+	fmt.Printf("%02d: write_new %s\n", idx, fpath)
 
 	// calculate how much of the file to read and where to start
 	finfo, err := os.Stat(fpath)
@@ -238,65 +239,48 @@ func read_write_some(idx int, fpath string) error {
 		return err
 	}
 
-	offset := int64(float32(rand.Intn(10)) / 10.0 * float32(finfo.Size()))
-	length := int64(float32(1+rand.Intn(5)) / 10.0 * float32(finfo.Size()))
+	// write a file the same size as the one provided
+	size := finfo.Size()
 
-	var b bytes.Buffer
+	// build the staging filename
+	root := filepath.Dir(filepath.Dir(fpath))
+	staging_dir := filepath.Join(root, "staging")
+	staging_file := filepath.Join(staging_dir, fmt.Sprintf("%04d", idx))
 
-	// read the data
-	err = func() error {
-		file, err := os.Open(fpath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil
-			}
-			return err
-		}
-		defer file.Close()
+	err = os.Mkdir(staging_dir, 0775)
+	if err != nil && !os.IsExist(err) {
+		fmt.Println("Error: failed to create staging area")
+		os.Exit(1)
+	}
 
-		_, err = file.Seek(offset, os.SEEK_SET)
-		if err != nil {
-			return err
-		}
-
-		_, err = io.CopyN(&b, file, length)
-		if err != nil && err != io.EOF {
-			return err
-		}
-
-		return nil
-	}()
+	// write to the staging file
+	file, err := os.Create(staging_file)
 	if err != nil {
 		return err
 	}
+	hasher := iohash.NewSha256HashWriter(file)
+	_, err = io.CopyN(hasher, rng, int64(size))
+	file.Close()
 
-	// write it back
-	err = func() error {
-		file, err := os.OpenFile(fpath, os.O_RDWR, 0664)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil
-			}
-			return err
-		}
-		defer file.Close()
+	hash := hasher.Hash()
 
-		_, err = file.Seek(offset, os.SEEK_SET)
-		if err != nil {
-			return err
-		}
-
-		_, err = io.Copy(file, &b)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}()
-	if err != nil {
+	dirname := filepath.Join(root, hash[:4])
+	if err := os.Mkdir(dirname, 0775); err != nil && !os.IsExist(err) {
+		os.Remove(staging_file)
 		return err
 	}
 
+	filename := filepath.Join(dirname, hash)
+	if err := os.Rename(staging_file, filename); err != nil {
+		os.Remove(staging_file)
+		return err
+	}
+
+	// delete the reference file
+	os.Remove(fpath)
+
+	// some trace for testing
+	fmt.Printf("replaced %s with %s\n", fpath, filename)
 	return nil
 }
 
