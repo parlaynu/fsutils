@@ -1,4 +1,4 @@
-module github.com/parlaynu/fshelpers
+module github.com/parlaynu/fsutils
 
 go 1.18
 

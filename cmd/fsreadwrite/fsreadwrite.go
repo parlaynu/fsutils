@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/parlaynu/fshelpers/iohash"
+	"github.com/parlaynu/fsutils/iohash"
 )
 
 type config struct {

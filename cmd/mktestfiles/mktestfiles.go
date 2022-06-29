@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/parlaynu/fshelpers/iohash"
+	"github.com/parlaynu/fsutils/iohash"
 )
 
 type config struct {
