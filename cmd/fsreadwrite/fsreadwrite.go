@@ -136,13 +136,13 @@ func worker(idx int, ch <-chan string, seed int64) {
 	for fpath := range ch {
 		var err error
 
-		v := rand.Intn(5)
+		v := rand.Intn(8)
 		switch {
-		case v < 2:
-			err = read_full(idx, fpath)
-		case v < 4:
+		case v < 5:
 			err = read_some(idx, fpath)
-		case v == 4:
+		case v < 7:
+			err = read_full(idx, fpath)
+		case v == 7:
 			err = write_new(idx, fpath, rng)
 		}
 
