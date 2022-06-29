@@ -279,8 +279,6 @@ func write_new(idx int, fpath string, rng *rand.Rand) error {
 	// delete the reference file
 	os.Remove(fpath)
 
-	// some trace for testing
-	fmt.Printf("replaced %s with %s\n", fpath, filename)
 	return nil
 }
 
