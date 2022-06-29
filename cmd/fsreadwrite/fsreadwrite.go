@@ -159,7 +159,7 @@ func (nw NullWriter) Write(p []byte) (int, error) {
 }
 
 func read_full(idx int, fpath string) error {
-	fmt.Printf("%02d: read_all %s\n", idx, fpath)
+	fmt.Printf("%02d: read_full %s\n", idx, fpath)
 
 	file, err := os.Open(fpath)
 	if err != nil {
