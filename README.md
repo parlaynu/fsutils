@@ -2,7 +2,7 @@
 
 ## Overview
 
-Some very simple tools to help test filesystems. Originally written to exercise the linux FS-Cache mechanism.
+Some very simple tools to help test filesystems.
 
 mktestfiles
 - create a bunch to test files in size between minsize and maxsize
